@@ -6,16 +6,16 @@ import (
 	"strings"
 )
 
-type JsonObject struct {
+type jsonObject struct {
 	obj    any
 	fields map[string]any
 }
 
 func NewJsonObject(obj any) Object {
-	return &JsonObject{obj: obj, fields: nil}
+	return &jsonObject{obj: obj, fields: nil}
 }
 
-func (obj *JsonObject) GetValue(name string) Value {
+func (obj *jsonObject) GetValue(name string) Value {
 	if obj.fields == nil {
 		obj.fields = make(map[string]any)
 		err := jsonConvertToMap(obj.obj, obj.fields)
