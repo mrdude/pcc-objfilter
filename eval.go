@@ -11,8 +11,8 @@ func evaluate(expr expression, obj Object) (result bool) {
 	case *rootExpr:
 		return evaluate(n.SubExpr, obj)
 	case *simpleExpr:
-		val1 := obj.GetValue(n.IdentifierOperand)
-		val2 := n.ValueOperand
+		val1 := n.Operand1.Evaluate(obj)
+		val2 := n.Operand2.Evaluate(obj)
 
 		return evalOperator(val1, val2, n.Operator)
 	case *regexMatchExpr:

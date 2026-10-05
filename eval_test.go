@@ -6,6 +6,7 @@ import (
 
 type LogEntry struct {
 	RawMessage string `json:"msg"`
+	Level      string `json:"level"`
 }
 
 func mustExpr(expr expression, err error) expression {
@@ -19,9 +20,9 @@ func TestSimpleExpressionEval(t *testing.T) {
 	pq := &Query{
 		root: newRootExpression(
 			mustExpr(newSimpleExpression(
-				"msg",
+				newFieldOperand("msg"),
 				"==",
-				Value{V: "Hello Whirled!", Ok: true},
+				newLiteralOperand(Value{V: "Hello Whirled!", Ok: true}),
 				nil,
 			)),
 		),
@@ -47,6 +48,46 @@ func TestSimpleExpressionEval2(t *testing.T) {
 
 	entry := LogEntry{
 		RawMessage: "Hello Whirled!",
+	}
+
+	v := pq.Evaluate(NewJsonObject(&entry))
+	if !v {
+		t.Fatalf("Expected v = true, got v = %t", v)
+	}
+}
+
+func TestSimpleExpressionEval3(t *testing.T) {
+	pq, err := ParseQuery(`
+	msg == level
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Prettified query: %s", pq.root.PrettyString())
+
+	entry := LogEntry{
+		RawMessage: "info",
+		Level:      "info",
+	}
+
+	v := pq.Evaluate(NewJsonObject(&entry))
+	if !v {
+		t.Fatalf("Expected v = true, got v = %t", v)
+	}
+}
+
+func TestSimpleExpressionEval4(t *testing.T) {
+	pq, err := ParseQuery(`
+	msg != level
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Prettified query: %s", pq.root.PrettyString())
+
+	entry := LogEntry{
+		RawMessage: "Hello Whirled!",
+		Level:      "info",
 	}
 
 	v := pq.Evaluate(NewJsonObject(&entry))

@@ -137,14 +137,13 @@ func (op comparisonOp) Canonicalize() comparisonOp {
 
 type simpleExpr struct {
 	expressionType
-	IdentifierOperand string // the identifier
-	Operator          comparisonOp
-	ValueOperand      Value
+	Operand1, Operand2 operand
+	Operator           comparisonOp
 
 	tokens []token
 }
 
-func newSimpleExpression(identifier string, operator string, valueOperand Value, tokens []token) (*simpleExpr, error) {
+func newSimpleExpression(operand1 operand, operator string, operand2 operand, tokens []token) (*simpleExpr, error) {
 	// validation
 	op := comparisonOp(operator)
 	if !op.IsValid() {
@@ -156,35 +155,17 @@ func newSimpleExpression(identifier string, operator string, valueOperand Value,
 	}
 
 	return &simpleExpr{
-		expressionType:    simpleExpression,
-		IdentifierOperand: identifier,
-		Operator:          op,
-		ValueOperand:      valueOperand,
+		expressionType: simpleExpression,
+		Operand1:       operand1,
+		Operand2:       operand2,
+		Operator:       op,
 
 		tokens: tokens,
 	}, nil
 }
 
 func (e *simpleExpr) PrettyString() string {
-	var valueOperand string
-	switch val := e.ValueOperand.V; val.(type) {
-	case string:
-		valueOperand = quoteStringLiteral(val.(string))
-	case int:
-		valueOperand = strconv.FormatInt(int64(val.(int)), 10)
-	case int8:
-		valueOperand = strconv.FormatInt(int64(val.(int8)), 10)
-	case int16:
-		valueOperand = strconv.FormatInt(int64(val.(int16)), 10)
-	case int32:
-		valueOperand = strconv.FormatInt(int64(val.(int32)), 10)
-	case int64:
-		valueOperand = strconv.FormatInt(int64(val.(int64)), 10)
-	default:
-		panic(fmt.Errorf("unexpected value type: %s", e.ValueOperand.V))
-	}
-
-	return fmt.Sprintf("%s %s %s", e.IdentifierOperand, e.Operator.Canonicalize(), valueOperand)
+	return fmt.Sprintf("%s %s %s", e.Operand1.PrettyString(), e.Operator.Canonicalize(), e.Operand2.PrettyString())
 }
 
 func (e *simpleExpr) Simplify() (replace expression, changesMade bool) {
@@ -212,6 +193,61 @@ func quoteStringLiteral(s string) string {
 	default:
 		panic(errors.New("this should never happen"))
 	}
+}
+
+type operand struct {
+	IsLiteral bool // if this a literal, or an object field?
+
+	Val  Value  // if IsLiteral=true, this is the value
+	Name string // if IsLiteral=false, this is the name of the object field
+}
+
+func newFieldOperand(name string) operand {
+	return operand{
+		IsLiteral: false,
+		Name:      name,
+	}
+}
+
+func newLiteralOperand(val Value) operand {
+	return operand{
+		IsLiteral: true,
+		Val:       val,
+	}
+}
+
+func (op *operand) Evaluate(obj Object) Value {
+	if op.IsLiteral {
+		return op.Val
+	}
+
+	return obj.GetValue(op.Name)
+}
+
+func (e *operand) PrettyString() string {
+	if e.IsLiteral {
+		var valueOperand string
+		switch val := e.Val.V; val.(type) {
+		case string:
+			valueOperand = quoteStringLiteral(val.(string))
+		case int:
+			valueOperand = strconv.FormatInt(int64(val.(int)), 10)
+		case int8:
+			valueOperand = strconv.FormatInt(int64(val.(int8)), 10)
+		case int16:
+			valueOperand = strconv.FormatInt(int64(val.(int16)), 10)
+		case int32:
+			valueOperand = strconv.FormatInt(int64(val.(int32)), 10)
+		case int64:
+			valueOperand = strconv.FormatInt(int64(val.(int64)), 10)
+		default:
+			panic(fmt.Errorf("unexpected value type: %s", e.Val.V))
+		}
+
+		return valueOperand
+	}
+
+	return e.Name
 }
 
 type regexMatchExpr struct {

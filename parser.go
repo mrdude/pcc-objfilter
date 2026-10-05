@@ -117,30 +117,40 @@ func (pq *parser) reduce() (expr expression, err error) {
 		}
 	}
 
-	// simple expression: <identifier> <operator> <identifier>
+	// simple expression: <identifier/literal> <non-regex operator> <identifier/literal>
 	if len(pq.stack) >= 3 {
 		top := pq.peekStack(3)
 
-		if top[0].MatchToken(identifierToken) && top[1].MatchToken(operatorToken) && (top[2].MatchToken(stringLiteralToken) || top[2].MatchToken(intLiteralToken)) {
+		isIdentifierOrLiteral := func(tok exprOrToken) bool {
+			return tok.MatchToken(identifierToken) || tok.MatchToken(stringLiteralToken) || tok.MatchToken(intLiteralToken)
+		}
+
+		if isIdentifierOrLiteral(top[0]) && (top[1].MatchToken(operatorToken) && comparisonOp(top[1].token.Text).Canonicalize() != regexMatchOp) && isIdentifierOrLiteral(top[2]) {
 			pq.popStack(3)
 
-			op := comparisonOp(top[1].token.Text).Canonicalize()
+			expr, err = newSimpleExpression(
+				operandFromToken(*top[0].token),
+				top[1].token.Text,
+				operandFromToken(*top[2].token),
+				[]token{*top[0].token, *top[1].token, *top[2].token},
+			)
+			return
+		}
+	}
 
-			if op == regexMatchOp {
-				expr, err = newRegexMatchExpression(
-					top[0].token.Text,
-					top[1].token.Text,
-					valueFromToken(*top[2].token),
-					[]token{*top[0].token, *top[1].token, *top[2].token},
-				)
-			} else {
-				expr, err = newSimpleExpression(
-					top[0].token.Text,
-					top[1].token.Text,
-					valueFromToken(*top[2].token),
-					[]token{*top[0].token, *top[1].token, *top[2].token},
-				)
-			}
+	// simple expression: <identifier> <regex operator> <string literal>
+	if len(pq.stack) >= 3 {
+		top := pq.peekStack(3)
+
+		if top[0].MatchToken(identifierToken) && (top[1].MatchToken(operatorToken) && comparisonOp(top[1].token.Text).Canonicalize() == regexMatchOp) && top[2].MatchToken(stringLiteralToken) {
+			pq.popStack(3)
+
+			expr, err = newRegexMatchExpression(
+				top[0].token.Text,
+				top[1].token.Text,
+				valueFromToken(*top[2].token),
+				[]token{*top[0].token, *top[1].token, *top[2].token},
+			)
 			return
 		}
 	}
@@ -213,6 +223,19 @@ func (pq *parser) reduce() (expr expression, err error) {
 	}
 
 	return
+}
+
+func operandFromToken(tok token) operand {
+	switch tok.Type {
+	case identifierToken:
+		return newFieldOperand(tok.Text)
+	case stringLiteralToken:
+		return newLiteralOperand(valueFromToken(tok))
+	case intLiteralToken:
+		return newLiteralOperand(valueFromToken(tok))
+	default:
+		panic(errors.New("this should not happen"))
+	}
 }
 
 func valueFromToken(tok token) Value {
